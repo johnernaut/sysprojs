@@ -4,7 +4,7 @@ import fetchMock from 'fetch-mock'
 import { Exception } from 'handlebars'
 
 /**
- * Dummy test
+ * Syspro tests
  */
 describe('Syspro test', () => {
   describe('initialization', () => {
@@ -39,6 +39,7 @@ describe('Syspro test', () => {
 
   describe('authentication', () => {
     let syspro: Syspro
+    let url: string
     afterEach(fetchMock.restore)
     beforeEach(() => {
       syspro = new Syspro({
@@ -49,30 +50,47 @@ describe('Syspro test', () => {
         company_pass: null,
         company: 'A'
       })
+      url = syspro.logonQuery()
     })
 
     it('fails authentication with bad credentials', async () => {
-      fetchMock.mock('http://server.com', 500)
+      fetchMock.mock(url, { body: 'ERROR: Invalid credentials' })
       let resp = await syspro.authenticate()
 
       expect(resp.ok).toBe(false)
       expect(resp.type).toEqual('failure')
     })
 
-    it('passes authentication with valid credentials', async () => {
-      fetchMock.mock('http://server.com', 200)
+    it('passes authentication and sets token with valid credentials', async () => {
+      const token = 'SDFLKJEJDSFLKJSDFI33   '
+      fetchMock.mock(url, { body: token })
       let resp = await syspro.authenticate()
 
       expect(resp.ok).toBe(true)
       expect(resp.type).toEqual('success')
+      expect(syspro.token).toEqual(token.trim())
     })
 
-    it('catches exceptions', async () => {
-      fetchMock.mock('http://server.com', { throws: Error('Error! Error!') })
+    it('fails when the server doesnt respond properly', async () => {
+      fetchMock.mock(url, 500)
       let resp = await syspro.authenticate()
 
       expect(resp.ok).toBe(false)
       expect(resp.type).toEqual('failure')
+    })
+
+    it('catches exceptions', async () => {
+      fetchMock.mock(url, { throws: Error('Error! Error!') })
+      let resp = await syspro.authenticate()
+
+      expect(resp.ok).toBe(false)
+      expect(resp.type).toEqual('failure')
+    })
+
+    it('includes companypass when present', () => {
+      syspro.settings.company_pass = '1234'
+
+      expect(syspro.logonQuery()).toContain('CompanyPassword')
     })
   })
 })

@@ -16,6 +16,7 @@ interface Settings {
 
 export default class Syspro {
   settings: Settings
+  token: string = ''
 
   constructor(settings: Settings) {
     if (!settings.host) {
@@ -35,12 +36,9 @@ export default class Syspro {
   }
 
   public async authenticate(): Promise<ApiResult<string>> {
-    let queryParams = Object.keys(this.settings)
-      .map(p => encodeURIComponent(p) + '=' + encodeURIComponent(this.settings[p]))
-      .join('&')
-
     try {
-      const resp = await fetch('http://server.com', {})
+      const resp = await fetch(this.logonQuery())
+
       if (!resp.ok) {
         return {
           type: 'failure',
@@ -52,11 +50,7 @@ export default class Syspro {
         }
       }
 
-      return {
-        type: 'success',
-        ok: true,
-        value: 'sup'
-      }
+      return this.parseLogonResponse(await resp.text())
     } catch (e) {
       return {
         type: 'failure',
@@ -66,6 +60,40 @@ export default class Syspro {
           title: 'Unable to authenticate with Syspro.'
         }
       }
+    }
+  }
+
+  baseUrl(): string {
+    return `${this.settings.host}:${this.settings.port}/sysprowcfservice/rest`
+  }
+
+  logonQuery(): string {
+    let paramString = `/Logon?Operator=${this.settings.operator}&OperatorPassword=${
+      this.settings.operator_pass
+    }`
+    if (this.settings.company_pass) paramString += `&CompanyPassword=${this.settings.company_pass}`
+
+    return this.baseUrl() + paramString
+  }
+
+  private parseLogonResponse(response: string): ApiResult<string> {
+    if (response.includes('ERROR')) {
+      return {
+        type: 'failure',
+        ok: false,
+        error: {
+          detail: response,
+          title: 'There was a problem logging in to Syspro.'
+        }
+      }
+    }
+
+    this.token = response.trim()
+
+    return {
+      type: 'success',
+      ok: true,
+      value: this.token
     }
   }
 }
